@@ -20,7 +20,7 @@ class ScreenCapturer:
             raise ValueError("monitor must be zero or greater")
         self.monitor = monitor
 
-    def capture(self, max_width: int = 1600, jpeg_quality: int = 82) -> ScreenFrame:
+    def capture(self, max_width: int = 1920, jpeg_quality: int = 82) -> ScreenFrame:
         if max_width < 1:
             raise ValueError("max_width must be positive")
         if not 1 <= jpeg_quality <= 100:

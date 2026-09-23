@@ -34,11 +34,12 @@ class ControllerConfig:
     action_delay: float = 0.15
     max_text_length: int = 10_000
     max_scroll_clicks: int = 100
+    failsafe_margin: int = 8
 
     def __post_init__(self) -> None:
         if self.movement_duration < 0 or self.key_interval < 0 or self.action_delay < 0:
             raise ValueError("action timing values cannot be negative")
-        if self.max_text_length < 1 or self.max_scroll_clicks < 1:
+        if self.max_text_length < 1 or self.max_scroll_clicks < 1 or self.failsafe_margin < 1:
             raise ValueError("action limits must be positive")
 
 
@@ -81,6 +82,11 @@ class DesktopController:
         except ActionExecutionError:
             raise
         except Exception as exc:
+            if type(exc).__name__ == "FailSafeException":
+                raise ActionExecutionError(
+                    "PyAutoGUI safety stop: move the mouse away from a screen corner, "
+                    "then retry. The bot keeps FAILSAFE enabled."
+                ) from exc
             raise ActionExecutionError(f"failed to execute {command.action.value}: {exc}") from exc
 
     def _validate_target(self, target: Target) -> None:
@@ -88,6 +94,18 @@ class DesktopController:
         if not 0 <= target.x < width or not 0 <= target.y < height:
             raise ActionExecutionError(
                 f"target ({target.x}, {target.y}) is outside screen bounds {width}x{height}"
+            )
+        margin = self.config.failsafe_margin
+        near_corner = (
+            target.x < margin and target.y < margin
+            or target.x < margin and target.y >= height - margin
+            or target.x >= width - margin and target.y < margin
+            or target.x >= width - margin and target.y >= height - margin
+        )
+        if near_corner:
+            raise ActionExecutionError(
+                f"target ({target.x}, {target.y}) is too close to a screen corner; "
+                f"click targets must be at least {margin} pixels from corners"
             )
 
     def _click(self, target: Target, double: bool) -> None:
@@ -100,7 +118,37 @@ class DesktopController:
             raise ActionExecutionError("type action requires non-empty text")
         if len(text) > self.config.max_text_length:
             raise ActionExecutionError("text payload exceeds configured limit")
-        self.backend.write(text, interval=self.config.key_interval)
+        if text.isascii():
+            self.backend.write(text, interval=self.config.key_interval)
+        else:
+            self._paste_text(text)
+
+    def _paste_text(self, text: str) -> None:
+        """Type arbitrary text via clipboard paste (handles Unicode, emoji, etc.)."""
+        import subprocess
+        # Save current clipboard, set new content, paste, then restore
+        try:
+            old_clip = subprocess.run(
+                ["powershell", "-Command", "Get-Clipboard"],
+                capture_output=True, text=True, timeout=3,
+            ).stdout.rstrip("\r\n")
+        except Exception:
+            old_clip = None
+        subprocess.run(
+            ["powershell", "-Command", f"Set-Clipboard -Value '{text.replace(chr(39), chr(39)+chr(39))}'"],
+            capture_output=True, timeout=3,
+        )
+        self.backend.hotkey("ctrl", "v", interval=self.config.key_interval)
+        self._sleep(0.1)
+        # Restore previous clipboard content
+        if old_clip is not None:
+            try:
+                subprocess.run(
+                    ["powershell", "-Command", f"Set-Clipboard -Value '{old_clip.replace(chr(39), chr(39)+chr(39))}'"],
+                    capture_output=True, timeout=3,
+                )
+            except Exception:
+                pass
 
     def _hotkey(self, keys: list[str]) -> None:
         if not keys or any(not key.strip() for key in keys):

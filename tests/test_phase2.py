@@ -66,6 +66,19 @@ def test_controller_rejects_out_of_bounds_and_missing_payloads():
         controller.execute(command("hotkey"))
     with pytest.raises(ActionExecutionError, match="safety limit"):
         controller.execute(command("scroll", target={"x": 0, "y": 101}))
+    with pytest.raises(ActionExecutionError, match="too close to a screen corner"):
+        controller.execute(command("click", target={"x": 0, "y": 0}))
+
+
+def test_controller_explains_pyautogui_failsafe_stop():
+    class FailsafeBackend(FakePyAutoGUI):
+        def moveTo(self, x, y, duration=0):
+            raise type("FailSafeException", (Exception,), {})("mouse at corner")
+
+    controller = DesktopController(FailsafeBackend(), sleep=lambda _: None)
+
+    with pytest.raises(ActionExecutionError, match="move the mouse away from a screen corner"):
+        controller.execute(command("click"))
 
 
 def test_controller_rejects_invalid_timing_configuration():

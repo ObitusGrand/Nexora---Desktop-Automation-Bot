@@ -96,7 +96,9 @@ class ChromaWorkflowMemory:
         metadatas = result.get("metadatas", [[]])[0]
         if not ids or not distances or not metadatas:
             return None
-        similarity = max(0.0, min(1.0, 1.0 - float(distances[0])))
+        raw_distance = float(distances[0])
+        # Chroma default embedding uses L2; clamp to [0, 1] for threshold comparison
+        similarity = max(0.0, min(1.0, 1.0 - raw_distance / 2.0))
         if similarity < threshold:
             return None
         payload = self._fernet.decrypt(str(metadatas[0]["payload"]).encode("ascii"))

@@ -1,4 +1,12 @@
-from desktop_bot.app import AppConfig, load_config
+from desktop_bot.app import AppConfig, direct_type_text, load_config
+
+
+def test_direct_type_text_extracts_explicit_focused_control_commands():
+    assert direct_type_text("type PEEPS BOBO") == "PEEPS BOBO"
+    assert direct_type_text("type: hello world") == "hello world"
+    assert direct_type_text("enter: message") == "message"
+    assert direct_type_text("Open Notepad") is None
+    assert direct_type_text("type:") is None
 
 
 def test_load_config_uses_environment_values():
@@ -59,3 +67,25 @@ def test_ollama_timeout_explains_when_service_is_unavailable():
             assert "Ollama is not running" in str(exc)
         else:
             raise AssertionError("expected a clear Ollama availability error")
+
+
+def test_ollama_verification_retries_plain_json_after_http_500():
+    from unittest.mock import patch
+
+    import httpx
+
+    from desktop_bot.vlm import OllamaVLM
+
+    request = httpx.Request("POST", "http://localhost:11434/api/chat")
+    failed = httpx.Response(500, request=request, text="structured output failed")
+    succeeded = httpx.Response(
+        200,
+        request=request,
+        json={"message": {"content": '{"verified":true,"reason":"changed"}'}},
+    )
+    with patch("desktop_bot.vlm.httpx.post", side_effect=[failed, succeeded]) as post:
+        result = OllamaVLM("llava").verify(b"before", b"after", "the screen changes")
+
+    assert result.verified is True
+    assert post.call_count == 2
+    assert post.call_args_list[1].kwargs["json"]["format"] == "json"

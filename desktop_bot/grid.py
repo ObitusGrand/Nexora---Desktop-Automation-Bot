@@ -15,11 +15,18 @@ def add_coordinate_grid(
     line_color: tuple[int, int, int] = (255, 80, 80),
     label_color: tuple[int, int, int] = (255, 255, 0),
 ) -> bytes:
-    """Overlay pixel coordinates and return a JPEG suitable for a VLM."""
+    """Overlay pixel coordinates and return a JPEG suitable for a VLM.
+
+    Returns the original bytes unchanged if the image cannot be decoded.
+    """
     if cell_size < 20:
         raise ValueError("cell_size must be at least 20 pixels")
 
-    image = image_from_bytes(image_bytes)
+    try:
+        image = image_from_bytes(image_bytes)
+    except (ValueError, Exception):
+        return image_bytes
+
     draw = ImageDraw.Draw(image, "RGBA")
     width, height = image.size
     font = ImageFont.load_default()

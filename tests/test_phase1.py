@@ -4,7 +4,7 @@ from io import BytesIO
 from desktop_bot.capture import image_from_bytes
 from desktop_bot.grid import add_coordinate_grid
 from desktop_bot.models import ActionCommand, ScreenFrame, Target
-from desktop_bot.vlm import VLMError, _parse_command
+from desktop_bot.vlm import VLMError, _parse_command, _parse_verification
 
 
 def jpeg(width=320, height=200):
@@ -46,3 +46,32 @@ def test_invalid_vlm_json_is_rejected():
         assert "valid JSON" in str(exc)
     else:
         raise AssertionError("invalid JSON was accepted")
+
+
+def test_pipe_separated_action_choices_are_rejected_with_actionable_error():
+    malformed = '{"thought":"choose", "action":"click|double_click|type|hotkey|scroll|wait|done", "target":{"x":0,"y":0}, "expected_outcome":"done"}'
+
+    try:
+        _parse_command(malformed)
+    except VLMError as exc:
+        assert "action choices as one string" in str(exc)
+    else:
+        raise AssertionError("malformed action choices were accepted")
+
+
+def test_type_text_is_recovered_when_model_puts_single_characters_in_keys():
+    malformed = '{"thought":"type it", "action":"type", "target":{"x":0,"y":0}, "text":"", "keys":["P","E","E","P","S"," ","B","O","B","O"], "expected_outcome":"text appears"}'
+
+    command = _parse_command(malformed)
+
+    assert command.text == "PEEPS BOBO"
+    assert command.keys == []
+
+
+def test_verification_requires_boolean_verified_field():
+    try:
+        _parse_verification('{"reason":"the screen changed"}')
+    except VLMError as exc:
+        assert "omitted the required boolean 'verified'" in str(exc)
+    else:
+        raise AssertionError("verification without verified was accepted")

@@ -2,7 +2,7 @@
 
 Phase 1 provides a screen perception pipeline for a computer-using agent:
 
-- `ScreenCapturer` captures a monitor with `mss` and emits resized JPEG frames.
+- `ScreenCapturer` captures a monitor with `mss` and emits JPEG frames up to 1920 pixels wide (1920x1080 monitors remain native resolution).
 - `add_coordinate_grid` annotates frames with pixel coordinates for visual localization.
 - `OpenAICompatibleVLM` supports OpenAI-compatible vision APIs and local gateways.
 - `OllamaVLM` supports Ollama multimodal models.
@@ -34,6 +34,8 @@ desktop-bot
 
 The native control panel keeps the task prompt, provider, model, endpoint, replay threshold, current status, and readiness checklist in one place. API-compatible providers also need `DESKTOP_BOT_API_KEY`. The UI asks before replaying a matching workflow and before executing any action classified as destructive.
 
+When the cursor is already focused in a text field, use an explicit direct command such as `type PEEPS BOBO`, `type: PEEPS BOBO`, or `enter: PEEPS BOBO`. These commands bypass VLM coordinate selection and type into the currently focused control.
+
 ## Application checklist
 
 - [ ] Create and activate the Python 3.11+ virtual environment.
@@ -47,7 +49,7 @@ The native control panel keeps the task prompt, provider, model, endpoint, repla
 - [ ] Confirm a delete, payment, submit, or send action pauses for explicit confirmation.
 - [ ] Run `python -m pytest` and `python -m compileall -q desktop_bot` before shipping.
 
-The controller aborts when the mouse reaches a screen corner, rejects click coordinates outside the display, limits text and scroll payloads, and requires non-empty type/hotkey data. Upward scrolling uses a negative `target.y`; click targets are still required to be inside the display bounds.
+The controller keeps PyAutoGUI's FAILSAFE enabled, aborts when the mouse reaches a screen corner, rejects click coordinates within 8 pixels of a corner, limits text and scroll payloads, and requires non-empty type/hotkey data. If the UI reports a safety stop, move the physical mouse away from a corner and retry. Upward scrolling uses a negative `target.y`; click targets are still required to be inside the display bounds.
 
 For the optional browser hook, install the extra with `python -m pip install -e ".[dev,browser]"` and provide an existing Playwright `Page` object.
 

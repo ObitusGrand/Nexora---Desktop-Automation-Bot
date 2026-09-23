@@ -11,8 +11,10 @@ def frame(label: bytes) -> ScreenFrame:
     return ScreenFrame(image_bytes=label, width=100, height=100, scale_x=1, scale_y=1, monitor=1)
 
 
-def action(name="click") -> ActionCommand:
-    return ActionCommand(thought="test", action=name, target={"x": 5, "y": 5}, expected_outcome="dialog opens")
+def action(name="click", **kwargs) -> ActionCommand:
+    values = {"thought": "test", "action": name, "target": {"x": 50, "y": 50}, "expected_outcome": "dialog opens"}
+    values.update(kwargs)
+    return ActionCommand(**values)
 
 
 @dataclass
@@ -87,3 +89,16 @@ def test_runner_returns_failed_state_when_capture_or_action_fails():
 
     assert state.status is LoopStatus.FAILED
     assert "display unavailable" in state.failure_context
+
+
+def test_runner_replans_instead_of_executing_corner_click():
+    model = FakeModel([action(target={"x": 0, "y": 0}), action("done")], [])
+    controller = FakeController()
+    runner = TaskRunner(FakeCapture([frame(b"screen")]), model, controller, sleep=lambda _: None)
+
+    state = runner.run("Open the dialog")
+
+    assert state.status is LoopStatus.COMPLETED
+    assert controller.actions == []
+    assert state.step_history[0].error is not None
+    assert "edge" in model.instructions[1]

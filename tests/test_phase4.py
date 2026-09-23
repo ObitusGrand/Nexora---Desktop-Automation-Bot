@@ -10,7 +10,7 @@ def frame(label: bytes) -> ScreenFrame:
 
 
 def action(name="click", **kwargs) -> ActionCommand:
-    values = {"thought": "test", "action": name, "target": {"x": 5, "y": 5}, "expected_outcome": "done"}
+    values = {"thought": "test", "action": name, "target": {"x": 50, "y": 50}, "expected_outcome": "done"}
     values.update(kwargs)
     return ActionCommand(**values)
 
